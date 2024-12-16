@@ -7,13 +7,14 @@ const userSchema = new mongoose.Schema({
   
   notifications: [
     {
-      sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Tambahkan ID pengirim
-      message: String,
-      pdfId: mongoose.Schema.Types.ObjectId, // Referensi PDF
+      message: { type: String, required: true },
+      pdfFilePath: { type: String },
+      signatureLocation: { x: Number, y: Number, page: Number },
       isRead: { type: Boolean, default: false },
       createdAt: { type: Date, default: Date.now },
     },
   ],
+  
   
   pdfs: [
     {

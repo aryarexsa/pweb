@@ -2,6 +2,7 @@ const User = require('../models/User');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const Notification = require('../models/Notification');
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
@@ -65,6 +66,7 @@ exports.sendPDF = async (req, res) => {
     }
 
     const targetUser = await User.findById(targetUserId);
+    const senderUser = await User.findById(req.session.userId); // User pengirim
 
     if (!targetUser) {
       return res.status(404).json({ error: 'Target user not found' });
@@ -74,9 +76,23 @@ exports.sendPDF = async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Tambahkan notifikasi dengan path file PDF dan posisi tanda tangan
+    // Notifikasi untuk pengirim
+    await Notification.create({
+      userId: senderUser._id,
+      message: `Success! You sent a PDF to ${targetUser.username}.`,
+      type: 'success',
+    });
+
+    // Notifikasi untuk penerima
+    await Notification.create({
+      userId: targetUser._id,
+      message: `${senderUser.username} sent you a PDF document.`,
+      type: 'info',
+    });
+
+    // Simpan informasi ke notifikasi di dalam user target
     targetUser.notifications.push({
-      message: `You have received a PDF from user ${req.session.username || 'another user'}.`,
+      message: `You have received a PDF from ${senderUser.username}.`,
       pdfFilePath: req.file.path,
       signatureLocation: { x: positionX, y: positionY, page: pageNumber },
       isRead: false,

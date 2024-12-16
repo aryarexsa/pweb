@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const User = require('../models/User');
 const multer = require('multer');
 const path = require('path');
 
@@ -28,8 +27,9 @@ const upload = multer({
 
 router.get('/dashboard', userController.dashboard);
 router.get('/search', userController.searchUser);
-router.post('/send-pdf', upload.single('pdfFile'), userController.sendPDF); // Gunakan upload di sini
-router.get('/notifications', userController.getNotifications);
+router.post('/send-pdf', upload.single('pdfFile'), userController.sendPDF); 
 router.post('/sign-pdf', upload.single('signatureFile'), userController.signPdf);
+router.get('/notifications', userController.getNotifications);
+
 
 module.exports = router;
