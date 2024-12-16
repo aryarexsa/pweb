@@ -194,9 +194,16 @@
               <!-- Set Signature Position -->
               <h6 class="text-center mt-4 mb-3 fw-bold">Set Signature Position</h6>
               <div id="pdfContainer" style="border: 1px solid #ddd; position: relative; height: 300px; overflow: auto;"></div>
+              <div id="pageInfo" class="text-center mt-2">Page 1 of 1</div>
+
               <input type="hidden" id="positionX" name="positionX">
               <input type="hidden" id="positionY" name="positionY">
               <input type="hidden" id="pageNumber" name="pageNumber">
+              <div class="text-center mt-3">
+                <button type="button" id="prevPage" class="btn btn-outline-primary me-2">Previous</button>
+                <button type="button" id="nextPage" class="btn btn-outline-primary">Next</button>
+              </div>
+              
       
               <div class="text-center mt-3">
                 <button type="button" id="confirmPosition" class="btn btn-outline-success">Confirm Position</button>
@@ -223,85 +230,110 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/js/pdf-sign.js"></script>
-<!-- Load PDF.js -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-<script>
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.3.122/pdf.worker.min.js';
 
-  const pdfFileInput = document.getElementById('pdfFile');
-  const pdfContainer = document.getElementById('pdfContainer');
-  let pdfDoc = null;
-  let scale = 1.5;
+const pdfFileInput = document.getElementById('pdfFile');
+const pdfContainer = document.getElementById('pdfContainer');
+let pdfDoc = null;
+let currentPage = 1;
+let totalPage = 0; // Total halaman dalam PDF
+let scale = 1.5;
 
-  pdfFileInput.addEventListener('change', async (event) => {
-    const file = event.target.files[0];
-    if (!file || file.type !== "application/pdf") {
-      alert("Please select a valid PDF file.");
-      return;
-    }
-
-    const fileReader = new FileReader();
-
-    fileReader.onload = async function() {
-      try {
-        const typedarray = new Uint8Array(this.result);
-        const loadingTask = pdfjsLib.getDocument(typedarray);
-        pdfDoc = await loadingTask.promise;
-
-        // Render halaman pertama
-        renderPage(1);
-      } catch (error) {
-        console.error('Error loading PDF:', error);
-        alert('Failed to load PDF.');
-      }
-    };
-
-    fileReader.readAsArrayBuffer(file);
-  });
-
-  async function renderPage(pageNumber) {
-    try {
-      if (!pdfDoc) return;
-
-      const page = await pdfDoc.getPage(pageNumber);
-      const viewport = page.getViewport({ scale });
-
-      // Clear previous canvas
-      pdfContainer.innerHTML = '';
-
-      // Setup canvas for PDF render
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      pdfContainer.appendChild(canvas);
-
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport,
-      };
-
-      await page.render(renderContext);
-    } catch (error) {
-      console.error('Error rendering page:', error);
-      alert('Failed to render PDF page.');
-    }
+pdfFileInput.addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  if (!file || file.type !== "application/pdf") {
+    alert("Please select a valid PDF file.");
+    return;
   }
-</script>
+
+  const fileReader = new FileReader();
+  fileReader.onload = async function () {
+    try {
+      const typedarray = new Uint8Array(this.result);
+      pdfDoc = await pdfjsLib.getDocument(typedarray).promise;
+
+      currentPage = 1;
+      totalPage = pdfDoc.numPages; // Set total halaman PDF
+      renderPage(currentPage);
+    } catch (error) {
+      console.error("Error loading PDF:", error);
+      alert("Failed to load PDF file.");
+    }
+  };
+
+  fileReader.readAsArrayBuffer(file);
+});
+
+async function renderPage(pageNumber) {
+  if (!pdfDoc) return;
+
+  try {
+    const page = await pdfDoc.getPage(pageNumber);
+    const viewport = page.getViewport({ scale });
+
+    pdfContainer.innerHTML = ''; // Bersihkan container sebelumnya
+
+    // Buat elemen canvas
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+    }).promise;
+
+    pdfContainer.appendChild(canvas);
+
+    // Tampilkan nomor halaman
+    document.getElementById('pageInfo').textContent = `Page ${pageNumber} of ${totalPage}`;
+  } catch (error) {
+    console.error("Error rendering PDF page:", error);
+    alert("Failed to render PDF page.");
+  }
+}
+
+// Fungsi untuk navigasi halaman
+function nextPage() {
+  if (currentPage < totalPage) {
+    currentPage++;
+    renderPage(currentPage);
+  } else {
+    alert("This is the last page.");
+  }
+}
+
+function prevPage() {
+  if (currentPage > 1) {
+    currentPage--;
+    renderPage(currentPage);
+  } else {
+    alert("This is the first page.");
+  }
+}
+
+// Event listener untuk tombol navigasi
+document.getElementById('prevPage').addEventListener('click', prevPage);
+document.getElementById('nextPage').addEventListener('click', nextPage);
+
+  </script>
+  
+  
 
 
   <script>let positionX = 0, positionY = 0, pageNumber = 1; 
 
     document.getElementById('pdfContainer').addEventListener('click', function (event) {
       const rect = event.target.getBoundingClientRect();
-      positionX = event.clientX - rect.left; // Koordinat X relatif ke container
-      positionY = event.clientY - rect.top;  // Koordinat Y relatif ke container
+      positionX = event.clientX - rect.left;
+      positionY = event.clientY - rect.top;
     
-      // Simpan koordinat ke input tersembunyi
       document.getElementById('positionX').value = positionX;
       document.getElementById('positionY').value = positionY;
-      document.getElementById('pageNumber').value = pageNumber; // Halaman default atau nanti disesuaikan
+      document.getElementById('pageNumber').value = pageNumber; 
     
       Swal.fire({
         title: 'Position Set',
@@ -412,6 +444,5 @@
 }
 
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
 </body>
 </html>
