@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* Navbar */
+    .navbar {
+    text-decoration: none !important; /* Hapus garis bawah */
+  }
+  .navbar .nav-link:hover {
+    color: #ffffff !important; /* Tetapkan warna tetap putih saat hover */
+  }
+  .dropdown-menu {
+    width: 500px; /* Atur lebar dropdown */
+    max-height: 400px; /* Tambahkan batas tinggi */
+    overflow-y: auto; /* Aktifkan scroll jika banyak notifikasi */
+    border-radius: 8px; /* Tambahkan border radius */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); /* Tambahkan bayangan */
+  }
+  .notification-badge {
+    position: absolute;
+    top: 5px; /* Sesuaikan ketinggian badge */
+    right: 0px; /* Geser ke kiri sedikit */
+    transform: translate(50%, -50%); /* Menyelaraskan posisi badge */
+    font-size: 0.75rem; /* Ukuran font lebih kecil */
+    padding: 0.2em 0.45em; /* Padding badge */
+    border-radius: 50%;
+  }
+  
+  .nav-link {
+    position: relative; /* Pastikan badge terkait langsung dengan parent */
+  }
+
+  .dropdown-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Menjadikan teks satu baris */
+    max-width: 100%;
+  }
+  .dropdown-item:hover {
+    background-color: #f1f1f1; /* Warna latar saat hover */
+  }
+
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(to right, #007bff, #0056b3);
+      color: #fff;
+      padding: 60px 0;
+      text-align: center;
+    }
+
+    .hero h2 {
+      font-weight: bold;
+    }
+
+    /* Notifications */
+    .list-group-item {
+      border: none;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .list-group-item:hover {
+      background-color: #f1f1f1;
+    }
+
+    .notification-icon {
+      font-size: 1.5rem;
+      margin-right: 10px;
+      color: #007bff;
+    }
+
+    /* Cards */
+    .card {
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .card-title {
+    font-weight: bold;
+    margin-bottom: 15px;
+  }
+
+  .btn {
+    border-radius: 50px;
+  }
+
+  .h-100 {
+    height: 100%;
+  }
+
+    /* Footer */
+    footer {
+      background-color: #007bff;
+      color: #fff;
+      padding: 10px 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+      <a class="navbar-brand" href="/">Digital Signature</a>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <!-- Notifications Dropdown -->
+          <li class="nav-item dropdown">
+            <a
+              class="nav-link dropdown-toggle"
+              href="#"
+              id="notificationsDropdown"
+              role="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              Notifications
+              <!-- Badge -->
+              <span class="badge bg-danger notification-badge">
+                <%= notifications.length %>
+              </span>
+            </a>
+            <!-- Dropdown Menu -->
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationsDropdown">
+              <% if (notifications && notifications.length > 0) { %>
+                <% notifications.forEach(function(notification) { %>
+                  <li class="dropdown-item">
+                    <small><%= notification.message %></small>
+                  </li>
+                  <li><hr class="dropdown-divider"></li>
+                <% }); %>
+              <% } else { %>
+                <li class="dropdown-item text-muted text-center">No new notifications</li>
+              <% } %>
+            </ul>
+          </li>
+          
+          
+          <li class="nav-item">
+            <a class="nav-link" href="/auth/logout">Logout</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  
+  <!-- Hero Section -->
+  <div class="hero">
+    <div class="container">
+      <h2>Welcome, <%= user.username %>!</h2>
+      <p>Manage your PDF documents with ease and security.</p>
+    </div>
+  </div>
+
+  <!-- Container -->
+  <div class="container mt-5">
+    <div class="row justify-content-center">
+      <!-- Search for User -->
+      <div class="col-md-6 mb-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title text-center">Search for User</h5>
+            <form id="searchForm" class="d-flex">
+              <input type="text" id="usernameInput" class="form-control me-2" placeholder="Enter username">
+              <button class="btn btn-outline-success" type="submit">Search</button>
+            </form>
+            <div id="searchResults" class="mt-3"></div>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Send PDF -->
+      <div id="uploadPdfSection" class="col-md-6 mb-3" style="display: none;">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title text-center mb-3">Send PDF</h5>
+      
+            <!-- Form Upload PDF -->
+            <form id="uploadPdfForm" action="/user/send-pdf" method="POST" enctype="multipart/form-data">
+              <input type="hidden" id="targetUserId" name="targetUserId" required>
+      
+              <!-- Pilih File PDF -->
+              <label for="pdfFile" class="form-label">Select PDF</label>
+              <input class="form-control mb-3" type="file" id="pdfFile" name="pdfFile" accept="application/pdf" required>
+      
+              <!-- Set Signature Position -->
+              <h6 class="text-center mt-4 mb-3 fw-bold">Set Signature Position</h6>
+              <div id="pdfContainer" style="border: 1px solid #ddd; position: relative; height: 300px; overflow: auto;"></div>
+              <input type="hidden" id="positionX" name="positionX">
+              <input type="hidden" id="positionY" name="positionY">
+              <input type="hidden" id="pageNumber" name="pageNumber">
+      
+              <div class="text-center mt-3">
+                <button type="button" id="confirmPosition" class="btn btn-outline-success">Confirm Position</button>
+              </div>
+      
+              <div class="text-center mt-3">
+                <button type="submit" class="btn btn-primary w-100">Send PDF</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      
+  
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      &copy; 2024 Digital Signature | All rights reserved
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/pdf-sign.js"></script>
+<!-- Load PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+
+  const pdfFileInput = document.getElementById('pdfFile');
+  const pdfContainer = document.getElementById('pdfContainer');
+  let pdfDoc = null;
+  let scale = 1.5;
+
+  pdfFileInput.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file || file.type !== "application/pdf") {
+      alert("Please select a valid PDF file.");
+      return;
+    }
+
+    const fileReader = new FileReader();
+
+    fileReader.onload = async function() {
+      try {
+        const typedarray = new Uint8Array(this.result);
+        const loadingTask = pdfjsLib.getDocument(typedarray);
+        pdfDoc = await loadingTask.promise;
+
+        // Render halaman pertama
+        renderPage(1);
+      } catch (error) {
+        console.error('Error loading PDF:', error);
+        alert('Failed to load PDF.');
+      }
+    };
+
+    fileReader.readAsArrayBuffer(file);
+  });
+
+  async function renderPage(pageNumber) {
+    try {
+      if (!pdfDoc) return;
+
+      const page = await pdfDoc.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+
+      // Clear previous canvas
+      pdfContainer.innerHTML = '';
+
+      // Setup canvas for PDF render
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      pdfContainer.appendChild(canvas);
+
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+      };
+
+      await page.render(renderContext);
+    } catch (error) {
+      console.error('Error rendering page:', error);
+      alert('Failed to render PDF page.');
+    }
+  }
+</script>
+
+
+  <script>let positionX = 0, positionY = 0, pageNumber = 1; 
+
+    document.getElementById('pdfContainer').addEventListener('click', function (event) {
+      const rect = event.target.getBoundingClientRect();
+      positionX = event.clientX - rect.left; // Koordinat X relatif ke container
+      positionY = event.clientY - rect.top;  // Koordinat Y relatif ke container
+    
+      // Simpan koordinat ke input tersembunyi
+      document.getElementById('positionX').value = positionX;
+      document.getElementById('positionY').value = positionY;
+      document.getElementById('pageNumber').value = pageNumber; // Halaman default atau nanti disesuaikan
+    
+      Swal.fire({
+        title: 'Position Set',
+        text: `X: ${positionX}, Y: ${positionY}, Page: ${pageNumber}`,
+        icon: 'success',
+      });
+    });
+    
+    // Event listener untuk tombol Confirm Position
+    document.getElementById('confirmPosition').addEventListener('click', function () {
+      if (positionX && positionY) {
+        Swal.fire({
+          title: 'Position Confirmed',
+          text: `Signature position set at X: ${positionX}, Y: ${positionY}, Page: ${pageNumber}`,
+          icon: 'success',
+        });
+      } else {
+        Swal.fire({
+          title: 'Error',
+          text: 'Please click on the PDF to set the position.',
+          icon: 'error',
+        });
+      }
+    });
+    </script>
+  <script>
+    document.getElementById('uploadPdfForm').addEventListener('submit', function (event) {
+      event.preventDefault(); // Hentikan form submit default
+  
+      const formData = new FormData(this);
+  
+      fetch('/user/send-pdf', {
+        method: 'POST',
+        body: formData,
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Tampilkan SweetAlert Popup
+            Swal.fire({
+              title: 'Success!',
+              text: 'PDF sent successfully!',
+              icon: 'success',
+              confirmButtonText: 'Go to Dashboard',
+              allowOutsideClick: false,
+            }).then((result) => {
+              if (result.isConfirmed) {
+                window.location.href = '/user/dashboard'; // Redirect ke /user/dashboard
+              }
+            });
+          } else {
+            Swal.fire({
+              title: 'Error!',
+              text: data.error || 'Failed to send PDF.',
+              icon: 'error',
+              confirmButtonText: 'OK',
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          Swal.fire({
+            title: 'Error!',
+            text: 'An unexpected error occurred.',
+            icon: 'error',
+            confirmButtonText: 'OK',
+          });
+        });
+    });
+  </script>
+  
+  <script>
+    document.getElementById('searchForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const username = document.getElementById('usernameInput').value;
+
+      fetch(`/user/search?username=${username}`)
+        .then(response => response.json())
+        .then(data => {
+          const resultsContainer = document.getElementById('searchResults');
+          resultsContainer.innerHTML = '';
+
+          if (data.length > 0) {
+            data.forEach(user => {
+              resultsContainer.innerHTML += `
+                <div class="card mb-2 p-2 d-flex justify-content-between">
+                  <div>
+                    <strong>${user.username}</strong><br>
+                    <small class="text-muted">${user.email}</small>
+                  </div>
+                  <button class="btn btn-primary btn-sm" onclick="selectUser('${user._id}', '${user.username}')">Select</button>
+                </div>`;
+            });
+          } else {
+            resultsContainer.innerHTML = '<p class="text-muted text-center">User not found.</p>';
+          }
+        });
+    });
+
+    function selectUser(userId, username) {
+    document.getElementById('targetUserId').value = userId;
+    document.getElementById('uploadPdfSection').style.display = 'block'; // Tampilkan upload section
+    Swal.fire({
+    title: 'User Selected',
+    text: `You selected ${username}. Now upload your PDF.`,
+    icon: 'success',
+  });
+}
+
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+</body>
+</html>
