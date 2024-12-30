@@ -7,14 +7,14 @@ require('dotenv').config();
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+app.use(express.static('public')); // Akses folder public
+app.use('/uploads', express.static('uploads')); 
 app.use(session({
   secret: process.env.SECRET_KEY || 'defaultSecretKey',
   resave: false,
   saveUninitialized: false
 }));
 app.use(express.json());
-
 
 app.set('view engine', 'ejs');
 

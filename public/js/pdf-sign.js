@@ -87,14 +87,16 @@ pdfFileInput.addEventListener('change', function (event) {
 // Navigasi halaman
 document.getElementById('prevPage').addEventListener('click', function () {
   if (currentPage > 1) {
-    currentPage--;
-    renderPage(currentPage);
+      currentPage--;
+      renderPage(currentPage);
+      console.log(`Navigated to page: ${currentPage}`);
   }
 });
 
 document.getElementById('nextPage').addEventListener('click', function () {
   if (currentPage < totalPages) {
-    currentPage++;
-    renderPage(currentPage);
+      currentPage++;
+      renderPage(currentPage);
+      console.log(`Navigated to page: ${currentPage}`);
   }
 });

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign PDF</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    #signatureBox {
+    border: 2px solid red; /* Border untuk marker */
+    position: absolute;
+    cursor: pointer;
+    display: none;
+    z-index: 10;
+    background-size: contain; /* Menjaga aspect ratio */
+    background-repeat: no-repeat; /* Jangan ulang gambar */
+    background-position: center; /* Gambar di tengah */
+    }
+
+    #pdfCanvas {
+    width: 100%; /* atau ukuran tetap, seperti width: 800px */
+    }
+
+    #signatureCanvas {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+    }
+
+    body {
+      background: linear-gradient(to right, #1e29ca, #40cec7);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      background: white;
+      margin-top: 50px;
+      padding: 40px;
+      border-radius: 15px;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-primary {
+      border-radius: 50px;
+      padding: 10px 20px;
+      transition: all 0.3s ease-in-out;
+    }
+
+    .btn-primary:hover {
+      background-color: #7be8fe;
+      transform: translateY(-3px);
+    }
+
+    .form-label {
+      font-weight: bold;
+    }
+
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Digital Signature</a>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="/user/dashboard">Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/auth/logout">Logout</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-10">
+        <div class="card">
+          <div class="card-body">
+            <h2 class="text-center text-primary mb-4">Sign PDF</h2>
+            <h5 class="text-center">Filename: <%= filename %></h5>
+
+            <!-- PDF Preview -->
+            <div id="pdfContainer" class="mt-4 position-relative" 
+              data-signature-location='<%= JSON.stringify(notification.signatureLocation || { x: 0, y: 0, page: 1 }) %>'>
+              <canvas id="pdfCanvas"></canvas>
+              <div id="signatureBox"></div>
+            </div>
+
+            <!-- Navigasi PDF -->
+            <div class="text-center mt-4">
+              <button id="prevPage" class="btn btn-outline-primary me-2">Previous</button>
+              <span id="pageInfo">Page 1 of 1</span>
+              <button id="nextPage" class="btn btn-outline-primary ms-2">Next</button>
+            </div>
+
+            <!-- Opsi Ukuran -->
+            <div class="mt-4">
+              <label for="signatureSize" class="form-label">Choose Signature Size</label>
+              <select id="signatureSize" class="form-select">
+                <option value="small">Small</option>
+                <option value="medium" selected>Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </div>
+
+            <!-- Metode Tanda Tangan -->
+            <div class="mt-4">
+              <label for="signatureMethod" class="form-label">Choose Signature Method</label>
+              <select id="signatureMethod" class="form-select">
+                <option value="png">Upload PNG</option>
+                <option value="canvas">Draw on Canvas</option>
+              </select>
+            </div>
+
+            <!-- Canvas untuk Tanda Tangan -->
+            <div id="signatureCanvasContainer" class="mt-4" style="display: none;">
+              <label for="signatureCanvas" class="form-label">Draw Your Signature</label>
+              <canvas id="signatureCanvas" style="border: 1px solid #ccc;"></canvas>
+              <button id="clearCanvas" class="btn btn-outline-danger mt-2">Clear</button>
+            </div>
+
+            <!-- Hidden Inputs -->
+            <input type="hidden" id="startPage" value="<%= pageNumber %>">
+            <input type="hidden" id="signatureWidth" name="signatureWidth" value="200">
+            <input type="hidden" id="signatureHeight" name="signatureHeight" value="100">
+            <input type="hidden" name="receiverUsername" value="<%= notification.receiverUsername %>">
+            <input type="hidden" id="pageNumber" name="pageNumber" value="<%= notification.signatureLocation?.page || 1 %>">
+
+            <!-- Form -->
+            <form action="/user/sign-pdf/<%= filename %>" method="POST" enctype="multipart/form-data" class="mt-4">
+              <div class="mt-4">
+                <label for="signatureFile" class="form-label">Upload Signature (PNG only)</label>
+                <input type="file" class="form-control" id="signatureFile" name="signatureFile" accept="image/png">
+              </div>
+              <input type="hidden" id="senderId" name="senderId" value="<%= notification.senderId %>">
+              <input type="hidden" id="signatureDataUrl" name="signatureDataUrl">
+              <button type="submit" class="btn btn-primary w-100 mt-4">Submit Signature</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF.js Script -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const pdfUrl = '/uploads/<%= filename %>';
+    let pdfDoc = null;
+    let currentPage = Number(document.getElementById('startPage').value);
+    let totalPage = 0;
+    const scale = 1.5;
+
+    const pdfCanvas = document.getElementById('pdfCanvas');
+    const pageInfo = document.getElementById('pageInfo');
+    const ctx = pdfCanvas.getContext('2d');
+
+    const pdfContainer = document.getElementById('pdfContainer');
+    const signatureLocation = JSON.parse(pdfContainer.dataset.signatureLocation);
+    const signatureBox = document.getElementById('signatureBox');
+
+    const signatureMethod = document.getElementById('signatureMethod');
+const signatureFileInput = document.getElementById('signatureFile');
+const signatureCanvasContainer = document.getElementById('signatureCanvasContainer');
+const signatureCanvas = document.getElementById('signatureCanvas');
+const clearCanvasButton = document.getElementById('clearCanvas');
+const signatureDataUrlInput = document.getElementById('signatureDataUrl');
+
+let canvasCtx = signatureCanvas.getContext('2d');
+let isDrawing = false;
+
+const updateMarkerPosition = () => {
+  const canvasRect = pdfCanvas.getBoundingClientRect();
+  const canvasWidth = pdfCanvas.width;
+  const canvasHeight = pdfCanvas.height;
+
+  const scaleX = canvasRect.width / canvasWidth;
+  const scaleY = canvasRect.height / canvasHeight;
+
+  const markerX = signatureLocation.x * canvasWidth * scaleX;
+  const markerY = signatureLocation.y * canvasHeight * scaleY;
+
+  const selectedSize = document.getElementById('signatureSize').value || 'medium';
+  const size = sizeOptions[selectedSize];
+  const adjustedWidth = size.width * scaleX;
+  const adjustedHeight = size.height * scaleY;
+
+  signatureBox.style.left = `${markerX - adjustedWidth / 2}px`;
+  signatureBox.style.top = `${markerY - adjustedHeight / 2}px`;
+  signatureBox.style.width = `${adjustedWidth}px`;
+  signatureBox.style.height = `${adjustedHeight}px`;
+};
+
+// Panggil fungsi ini saat render pertama kali dan saat window di-resize
+window.addEventListener('resize', updateMarkerPosition);
+
+// Atur ukuran canvas sesuai dengan aspect ratio border marker
+const resizeCanvas = () => {
+  const width = parseFloat(signatureBox.style.width) || 200;
+  const height = parseFloat(signatureBox.style.height) || 100;
+  signatureCanvas.width = width;
+  signatureCanvas.height = height;
+};
+
+// Handle dropdown change
+signatureMethod.addEventListener('change', (e) => {
+  const method = e.target.value;
+
+  // Hapus latar belakang signatureBox saat metode diubah
+  signatureBox.style.backgroundImage = 'none'; 
+  signatureDataUrlInput.value = ''; 
+
+  if (method === 'png') {
+    signatureFileInput.parentElement.style.display = 'block';
+    signatureCanvasContainer.style.display = 'none';
+  } else if (method === 'canvas') {
+    signatureFileInput.parentElement.style.display = 'none';
+    signatureCanvasContainer.style.display = 'block';
+    resizeCanvas();
+  }
+});
+
+
+// Handle drawing on canvas
+signatureCanvas.addEventListener('mousedown', (e) => {
+  isDrawing = true;
+  canvasCtx.beginPath(); // Mulai path baru
+  const rect = signatureCanvas.getBoundingClientRect();
+  canvasCtx.moveTo(e.clientX - rect.left, e.clientY - rect.top); // Pindahkan ke titik awal
+});
+
+signatureCanvas.addEventListener('mouseup', () => {
+  isDrawing = false;
+  canvasCtx.closePath(); // Tutup path saat menggambar selesai
+  syncCanvasToPDF(); // Sinkronkan ke PDF
+});
+signatureCanvas.addEventListener('mousemove', (e) => {
+  if (!isDrawing) return;
+  const rect = signatureCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  canvasCtx.lineTo(x, y);
+  canvasCtx.stroke();
+});
+
+// Clear canvas
+clearCanvasButton.addEventListener('click', () => {
+  canvasCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height); // Hapus semua gambar di canvas
+  signatureBox.style.backgroundImage = 'none'; // Reset background pada marker
+  signatureDataUrlInput.value = ''; // Hapus data URL tanda tangan
+});
+
+// Sync canvas drawing with signatureBox
+const syncCanvasToPDF = () => {
+  const dataUrl = signatureCanvas.toDataURL('image/png');
+  signatureBox.style.backgroundImage = `url(${dataUrl})`;
+  signatureBox.style.backgroundSize = 'contain';
+  signatureBox.style.backgroundRepeat = 'no-repeat';
+  signatureBox.style.backgroundPosition = 'center';
+  signatureDataUrlInput.value = dataUrl; // Set ke hidden input untuk pengiriman ke server
+};
+
+signatureCanvas.addEventListener('mouseup', syncCanvasToPDF);
+signatureCanvas.addEventListener('mouseout', syncCanvasToPDF);
+
+    const sizeOptions = {
+      small: { width: 100, height: 50 },
+      medium: { width: 200, height: 100 },
+      large: { width: 300, height: 150 },
+    };
+
+    const renderMarker = (pageNumber) => {
+  if (
+    signatureLocation &&
+    signatureLocation.page === pageNumber &&
+    signatureLocation.x !== undefined &&
+    signatureLocation.y !== undefined
+  ) {
+    const canvasWidth = pdfCanvas.width; // Lebar asli canvas
+    const canvasHeight = pdfCanvas.height; // Tinggi asli canvas
+    const canvasRect = pdfCanvas.getBoundingClientRect(); // Dimensi canvas di viewport
+
+    // Hitung skala untuk viewport
+    const scaleX = canvasRect.width / canvasWidth;
+    const scaleY = canvasRect.height / canvasHeight;
+
+    // Koordinat marker dalam skala viewport
+    const markerX = signatureLocation.x * canvasRect.width;
+    const markerY = signatureLocation.y * canvasRect.height;
+
+    const { width, height } = sizeOptions.medium; // Ukuran marker
+
+    // Atur posisi dan ukuran marker
+    signatureBox.style.left = `${markerX - width / 2}px`;
+    signatureBox.style.top = `${markerY - height / 2}px`;
+    signatureBox.style.width = `${width}px`;
+    signatureBox.style.height = `${height}px`;
+    signatureBox.style.border = '2px solid red';
+    signatureBox.style.position = 'absolute';
+    signatureBox.style.display = 'block';
+    signatureBox.style.zIndex = '10';
+    signatureBox.style.resize = 'none';
+    signatureBox.style.overflow = 'hidden';
+  } else {
+    signatureBox.style.display = 'none';
+  }
+};
+
+// Event listener untuk klik marker di PDF
+document.getElementById('pdfContainer').addEventListener('click', function (e) {
+    const rect = e.target.getBoundingClientRect();
+    const x = e.clientX - rect.left; // Koordinat X relatif ke PDF
+    const y = e.clientY - rect.top;  // Koordinat Y relatif ke PDF
+    const currentPageNumber = currentPage; // Ambil halaman aktif
+    document.getElementById('signatureDataUrl').value = `${x},${y},${currentPageNumber}`;
+    document.getElementById('pageNumber').value = currentPageNumber; // Simpan halaman ke hidden input
+    console.log('Page:', currentPageNumber, 'X:', x, 'Y:', y);
+});
+
+    // Menangani upload PNG
+document.getElementById('signatureFile').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+
+  if (file && file.type === 'image/png') {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+
+      img.onload = () => {
+        const selectedSize = document.getElementById('signatureSize').value || 'medium';
+        // Set gambar ke dalam signatureBox dengan aspect ratio tetap
+        signatureBox.style.backgroundImage = `url(${img.src})`;
+        signatureBox.style.backgroundSize = 'contain'; // Pastikan aspect ratio terjaga
+        signatureBox.style.backgroundPosition = 'center'; // Gambar tetap di tengah
+        signatureBox.style.backgroundRepeat = 'no-repeat';
+
+        console.log(`Signature PNG uploaded and fitted to ${selectedSize} size.`);
+      };
+    };
+
+    reader.readAsDataURL(file); // Baca file sebagai Data URL
+  } else {
+    alert('Please upload a valid PNG file.');
+  }
+});
+
+
+    const renderPage = async (pageNumber) => {
+      try {
+        const page = await pdfDoc.getPage(pageNumber);
+        const viewport = page.getViewport({ scale });
+
+        pdfCanvas.width = viewport.width;
+        pdfCanvas.height = viewport.height;
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        pageInfo.textContent = `Page ${pageNumber} of ${totalPage}`;
+        updateMarkerPosition(); // Panggil setelah halaman dirender
+        renderMarker(pageNumber);
+      } catch (error) {
+        console.error('Error rendering page:', error);
+        alert('Failed to render page.');
+      }
+    };
+
+    const nextPage = () => {
+      if (currentPage < totalPage) {
+        currentPage++;
+        renderPage(currentPage);
+      } else {
+        alert('This is the last page.');
+      }
+    };
+
+    const prevPage = () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderPage(currentPage);
+      } else {
+        alert('This is the first page.');
+      }
+    };
+
+    document.getElementById('signatureSize').addEventListener('change', (event) => {
+      const selectedSize = event.target.value;
+      const { width, height } = sizeOptions[selectedSize];
+
+      const oldWidth = parseFloat(signatureBox.style.width || '200');
+      const oldHeight = parseFloat(signatureBox.style.height || '100');
+      const diffWidth = (width - oldWidth) / 2;
+      const diffHeight = (height - oldHeight) / 2;
+
+      signatureBox.style.width = `${width}px`;
+      signatureBox.style.height = `${height}px`;
+      signatureBox.style.left = `${parseFloat(signatureBox.style.left) - diffWidth}px`;
+      signatureBox.style.top = `${parseFloat(signatureBox.style.top) - diffHeight}px`;
+
+      document.getElementById('signatureWidth').value = width;
+      document.getElementById('signatureHeight').value = height;
+
+      updateMarkerPosition();
+    });
+
+    const initializePDF = async () => {
+      try {
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        pdfDoc = await loadingTask.promise;
+        totalPage = pdfDoc.numPages;
+        renderPage(currentPage);
+        updateMarkerPosition(); // Panggil setelah halaman dirender
+      } catch (error) {
+        console.error('Error loading PDF:', error);
+        alert('Failed to load PDF document.');
+      }
+    };
+
+    document.getElementById('nextPage').addEventListener('click', nextPage);
+    document.getElementById('prevPage').addEventListener('click', prevPage);
+    // Validasi sebelum form dikirim
+    document.querySelector('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  if (!document.getElementById('senderId').value) {
+    Swal.fire({
+      title: 'Error',
+      text: 'Sender ID is missing.',
+      icon: 'error',
+      confirmButtonText: 'OK',
+    });
+    return;
+  }
+
+  const formData = new FormData(e.target);
+
+  try {
+    const response = await fetch(e.target.action, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      Swal.fire({
+        title: 'Success',
+        text: 'File signed and sent to the sender.',
+        icon: 'success',
+        confirmButtonText: 'OK',
+      }).then(() => {
+        window.location.href = '/user/dashboard'; // Redirect to dashboard
+      });
+    } else {
+      Swal.fire({
+        title: 'Error',
+        text: result.error || 'An error occurred.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+      });
+    }
+  } catch (error) {
+    console.error('Error submitting signature:', error);
+    Swal.fire({
+      title: 'Error',
+      text: 'An unexpected error occurred.',
+      icon: 'error',
+      confirmButtonText: 'OK',
+    });
+  }
+});
+
+
+    initializePDF();
+  </script>
+</body>
+</html>

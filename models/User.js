@@ -11,6 +11,10 @@ const userSchema = new mongoose.Schema({
       pdfFilePath: { type: String },
       signatureLocation: { x: Number, y: Number, page: Number },
       isRead: { type: Boolean, default: false },
+      actionLink: { type: String },
+      actionType: { type: String, enum: ['sign', 'download'], default: null },
+      senderUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // User pengirim
+      targetUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // User penerima
       createdAt: { type: Date, default: Date.now },
     },
   ],
